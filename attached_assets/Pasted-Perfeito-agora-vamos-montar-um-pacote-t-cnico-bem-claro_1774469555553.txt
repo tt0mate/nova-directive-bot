@@ -1,0 +1,267 @@
+Perfeito — agora vamos montar um **pacote técnico bem claro** pra você mandar pra outra IA implementar no bot.
+Vou fazer isso como se fosse uma **especificação de sistema**, pra evitar erro 👀
+
+---
+
+# 🧾 ESPECIFICAÇÃO DO SISTEMA DE FICHA (RPG DISCORD)
+
+## 📌 PREFIXO
+
+Todos os comandos usam:
+
+```
+&
+```
+
+---
+
+# 🧠 ESTRUTURA DE DADOS (POR JOGADOR)
+
+Cada jogador deve ter:
+
+* `hp_atual`
+* `hp_max`
+* `energia_atual`
+* `energia_max`
+* `sanidade_atual`
+* `sanidade_max`
+
+---
+
+# 📊 REGRAS DE HP
+
+## ✔️ Porcentagem
+
+```id="calc1"
+porcentagem = (hp_atual / hp_max) * 100
+```
+
+* Sempre **arredondar pra baixo** para múltiplos de 10
+
+---
+
+## ✔️ Limite negativo
+
+```id="calc2"
+hp_min = -(hp_max / 2)
+```
+
+Exemplo:
+
+* 100 HP → mínimo = -50
+
+---
+
+# 🎮 SISTEMA DE BARRA
+
+## ✔️ Conversão:
+
+* `█` = 20%
+* `▌` = 10%
+* `▁` = vazio
+
+Sempre total de **5 blocos**
+
+---
+
+## ✔️ Exemplo:
+
+| %   | Barra |
+| --- | ----- |
+| 100 | █████ |
+| 70  | ███▌▁ |
+| 30  | █▌▁▁▁ |
+| 0   | ▁▁▁▁▁ |
+
+---
+
+## ✔️ Formato final:
+
+```id="bar1"
+⟦BARRA⟧ • XX%
+```
+
+---
+
+# 🚨 SISTEMA DE DOR (HP)
+
+## ✔️ Condições:
+
+```id="dor1"
+≥ 70% → [Condição Estável]
+< 70% → [Dor Leve]
+< 50% → [Alerta: Integridade Comprometida]
+< 30% → [ALERTA CRÍTICO ⚠️: Danos Severos]
+< 0% → [Colapso Mental Iminente 🧠]
+≤ -50% → [⚠ SINAIS VITAIS EM COLAPSO]
+```
+
+---
+
+# 📜 COMANDO: VER FICHA
+
+## ✔️ Comando:
+
+```id="cmd1"
+&ficha
+```
+
+## ✔️ Retorno:
+
+```id="resp1"
+🧾 Ficha de Operador: {nome}
+
+❤️ HP: {hp_atual}/{hp_max}
+⟦barra⟧ • {porcentagem}%
+{status_dor}
+
+⚡ Energia Espiritual: {energia_atual}/{energia_max}
+⟦barra⟧ • {porcentagem}%
+
+🧠 Sanidade: {sanidade_atual}/{sanidade_max}
+⟦barra⟧ • {porcentagem}%
+```
+
+---
+
+# ⚔️ COMANDOS DE JOGADOR
+
+## ✔️ Descontar HP
+
+```id="cmd2"
+&hpdescontar <valor>
+```
+
+### Regra:
+
+* Subtrai do `hp_atual`
+* NÃO pode passar de `hp_min`
+
+---
+
+## ✔️ Gastar energia
+
+```id="cmd3"
+&energiausar <valor>
+```
+
+---
+
+## ✔️ Perder sanidade
+
+```id="cmd4"
+&sanidadeperder <valor>
+```
+
+---
+
+# 🛡️ COMANDOS DE ADMIN
+
+(APENAS ADMINISTRADORES)
+
+---
+
+## ✔️ Definir HP máximo
+
+```id="cmd5"
+&sethpmax @usuario <valor>
+```
+
+---
+
+## ✔️ Adicionar HP
+
+```id="cmd6"
+&hpadd @usuario <valor>
+```
+
+* Pode curar acima do atual
+* NÃO ultrapassa `hp_max`
+
+---
+
+## ✔️ Reduzir HP máximo
+
+```id="cmd7"
+&removehpmax @usuario <valor>
+```
+
+---
+
+## ✔️ Setar HP direto (debug/admin)
+
+```id="cmd8"
+&sethp @usuario <valor>
+```
+
+---
+
+## ✔️ Energia e sanidade (mesma lógica)
+
+```id="cmd9"
+&setenergiamax
+&energiaadd
+
+&setsanidademax
+&sanidadeadd
+```
+
+---
+
+# ⚠️ REGRAS IMPORTANTES
+
+* Jogador **NÃO pode se curar sozinho**
+* Jogador **SÓ pode perder recursos**
+* Admin controla recuperação
+
+---
+
+# 🎨 DETALHES VISUAIS
+
+* Sempre usar:
+
+```id="style1"
+⟦ ⟧
+```
+
+* Sempre usar:
+
+```id="style2"
+• XX%
+```
+
+---
+
+# 🧠 OBSERVAÇÃO IMPORTANTE
+
+Se `hp_atual <= hp_min`:
+
+* Personagem entra em estado final
+* Pode ser tratado como:
+
+  * inconsciente
+  * morto
+  * fora de combate
+
+---
+
+# 🚀 PRÓXIMO PASSO
+
+Quando você mandar isso pra outra IA, ela já consegue montar o bot.
+
+Depois disso, volta aqui que a gente pode evoluir:
+
+🔥 sistema de combate
+🔥 cooldown de habilidades
+🔥 efeitos de sanidade (alucinação, perda de controle)
+🔥 sistema de morte / salvamento
+
+---
+
+Se quiser, no próximo passo posso te entregar:
+
+👉 código pronto em Python
+ou
+👉 sistema de banco de dados (pra salvar ficha)
+
+Só falar 👀
