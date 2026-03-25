@@ -1,4 +1,5 @@
 import discord
+from discord import SyncWebhook
 from dotenv import load_dotenv
 import os
 
@@ -19,7 +20,12 @@ async def on_message(message):
         return
 
     if message.content.startswith('&hello'):
-        await message.channel.send('Hello!')
+        webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
+        if webhook_url:
+            webhook = SyncWebhook.from_url(webhook_url)
+            webhook.send('Hello!')
+        else:
+            await message.channel.send('Webhook não configurado!')
 
 token = os.getenv('DISCORD_TOKEN')
 if not token:
