@@ -77,6 +77,13 @@ def parse_valor(parts, index):
 @client.event
 async def on_ready():
     print(f'Logged in as {client.user}')
+    await client.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="✅ Sistema de Fichas Ativo"
+        )
+    )
 
 @client.event
 async def on_message(message):
