@@ -158,6 +158,62 @@ async def on_message(message):
             f"⟦{san_barra}⟧ • {san_pct}%"
         )
 
+    elif cmd == '&fichaajuda':
+        ajuda = (
+            "📖 **Comandos disponíveis para jogadores**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🧾 **`&ficha`**\n"
+            "Exibe sua ficha completa com HP, Energia e Sanidade.\n"
+            "→ Exemplo: `&ficha`\n\n"
+            "❤️ **`&hpdescontar <valor>`**\n"
+            "Desconta HP do seu personagem. Não pode passar do limite mínimo.\n"
+            "→ Exemplo: `&hpdescontar 20`\n\n"
+            "⚡ **`&energiausar <valor>`**\n"
+            "Gasta energia espiritual do seu personagem.\n"
+            "→ Exemplo: `&energiausar 15`\n\n"
+            "🧠 **`&sanidadeperder <valor>`**\n"
+            "Reduz a sanidade do seu personagem.\n"
+            "→ Exemplo: `&sanidadeperder 10`\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ Jogadores **não podem se curar sozinhos**. Apenas admins recuperam recursos."
+        )
+        await message.channel.send(ajuda)
+
+    elif cmd == '&ajudaadm':
+        if not is_admin(message.author):
+            await message.channel.send('❌ Apenas administradores podem usar este comando.')
+            return
+        ajuda_adm = (
+            "🛡️ **Comandos de Administrador**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "❤️ **`&sethpmax @usuario <valor>`**\n"
+            "Define o HP máximo de um jogador.\n"
+            "→ Exemplo: `&sethpmax @Jogador 150`\n\n"
+            "❤️ **`&hpadd @usuario <valor>`**\n"
+            "Cura HP de um jogador (não ultrapassa o máximo).\n"
+            "→ Exemplo: `&hpadd @Jogador 30`\n\n"
+            "❤️ **`&removehpmax @usuario <valor>`**\n"
+            "Reduz o HP máximo de um jogador permanentemente.\n"
+            "→ Exemplo: `&removehpmax @Jogador 20`\n\n"
+            "❤️ **`&sethp @usuario <valor>`**\n"
+            "Define o HP atual de um jogador diretamente (debug).\n"
+            "→ Exemplo: `&sethp @Jogador 50`\n\n"
+            "⚡ **`&setenergiamax @usuario <valor>`**\n"
+            "Define a energia máxima de um jogador.\n"
+            "→ Exemplo: `&setenergiamax @Jogador 120`\n\n"
+            "⚡ **`&energiaadd @usuario <valor>`**\n"
+            "Recupera energia de um jogador (não ultrapassa o máximo).\n"
+            "→ Exemplo: `&energiaadd @Jogador 40`\n\n"
+            "🧠 **`&setsanidademax @usuario <valor>`**\n"
+            "Define a sanidade máxima de um jogador.\n"
+            "→ Exemplo: `&setsanidademax @Jogador 100`\n\n"
+            "🧠 **`&sanidadeadd @usuario <valor>`**\n"
+            "Recupera sanidade de um jogador (não ultrapassa o máximo).\n"
+            "→ Exemplo: `&sanidadeadd @Jogador 25`\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        await message.channel.send(ajuda_adm)
+
     # ─── COMANDOS DE ADMIN ─────────────────────────────────────────────────────
 
     elif cmd == '&sethpmax':
