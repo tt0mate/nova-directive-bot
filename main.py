@@ -1,5 +1,5 @@
 import discord
-from discord import SyncWebhook
+import aiohttp
 from dotenv import load_dotenv
 import os
 
@@ -22,8 +22,9 @@ async def on_message(message):
     if message.content.startswith('&hello'):
         webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
         if webhook_url:
-            webhook = SyncWebhook.from_url(webhook_url)
-            webhook.send('Hello!')
+            async with aiohttp.ClientSession() as session:
+                webhook = discord.Webhook.from_url(webhook_url, session=session)
+                await webhook.send('Hello!')
         else:
             await message.channel.send('Webhook não configurado!')
 
