@@ -2,6 +2,8 @@ import discord
 import json
 import os
 import math
+import asyncio
+from aiohttp import web
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -382,8 +384,24 @@ async def on_message(message):
             f"⟦{san_barra}⟧ • {san_pct}%"
         )
 
-token = os.getenv('DISCORD_TOKEN')
-if not token:
-    print('Error: DISCORD_TOKEN environment variable not set.')
-else:
-    client.run(token)
+async def health_check(request):
+    return web.Response(text='OK')
+
+async def start_web():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+
+async def main():
+    async with client:
+        await start_web()
+        token = os.getenv('DISCORD_TOKEN')
+        if not token:
+            print('Error: DISCORD_TOKEN environment variable not set.')
+            return
+        await client.start(token)
+
+asyncio.run(main())
