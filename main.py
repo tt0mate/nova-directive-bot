@@ -104,23 +104,47 @@ async def on_message(message):
         ficha = get_ficha(data, message.author.id)
         save_data(data)
         nome = message.author.display_name
+        avatar = message.author.display_avatar.url
 
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
         dor = status_dor(ficha['hp_atual'], ficha['hp_max'])
 
-        resposta = (
-            f"🧾 **Ficha de Operador: {nome}**\n\n"
-            f"❤️ **HP:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
-            f"⟦{hp_barra}⟧ • {hp_pct}%\n"
-            f"{dor}\n\n"
-            f"⚡ **Energia Espiritual:** {ficha['energia_atual']}/{ficha['energia_max']}\n"
-            f"⟦{en_barra}⟧ • {en_pct}%\n\n"
-            f"🧠 **Sanidade:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
-            f"⟦{san_barra}⟧ • {san_pct}%"
+        hp_pct_real = (ficha['hp_atual'] / ficha['hp_max'] * 100) if ficha['hp_max'] > 0 else 0
+        if ficha['hp_atual'] < 0:
+            cor = 0x1a1a2e
+        elif hp_pct_real < 30:
+            cor = 0xe74c3c
+        elif hp_pct_real < 50:
+            cor = 0xe67e22
+        elif hp_pct_real < 70:
+            cor = 0xf1c40f
+        else:
+            cor = 0x2ecc71
+
+        embed = discord.Embed(
+            title=f"🧾 Ficha de Operador: {nome}",
+            color=cor
         )
-        await message.channel.send(resposta)
+        embed.set_thumbnail(url=avatar)
+        embed.add_field(
+            name="❤️ HP",
+            value=f"`{ficha['hp_atual']}/{ficha['hp_max']}`\n⟦{hp_barra}⟧ • {hp_pct}%\n{dor}",
+            inline=False
+        )
+        embed.add_field(
+            name="⚡ Energia Espiritual",
+            value=f"`{ficha['energia_atual']}/{ficha['energia_max']}`\n⟦{en_barra}⟧ • {en_pct}%",
+            inline=True
+        )
+        embed.add_field(
+            name="🧠 Sanidade",
+            value=f"`{ficha['sanidade_atual']}/{ficha['sanidade_max']}`\n⟦{san_barra}⟧ • {san_pct}%",
+            inline=True
+        )
+        embed.set_footer(text="Sistema de Fichas • RPG")
+        await message.channel.send(embed=embed)
 
     elif cmd == '&hpdescontar':
         valor, erro = parse_valor(parts, 1)
