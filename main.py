@@ -34,7 +34,10 @@ def get_ficha(data, user_id):
             'energia_atual': 100,
             'energia_max': 100,
             'sanidade_atual': 100,
-            'sanidade_max': 100
+            'sanidade_max': 100,
+            'nome': None,
+            'imagem': None,
+            'cor': None
         }
     return data[uid]
 
@@ -76,6 +79,27 @@ def parse_valor(parts, index):
     except (IndexError, ValueError):
         return None, 'Valor inválido ou ausente.'
 
+def parse_cor(texto):
+    texto = texto.strip().lstrip('#')
+    try:
+        return int(texto, 16), None
+    except ValueError:
+        return None, 'Cor inválida. Use formato hex, ex: `FF0000` ou `#FF0000`.'
+
+async def resolver_alvo(message, parts, index=1):
+    if message.mentions:
+        m = message.mentions[0]
+        return str(m.id), m.display_name, None
+    if len(parts) > index:
+        try:
+            uid = int(parts[index])
+            membro = message.guild.get_member(uid)
+            nome = membro.display_name if membro else str(uid)
+            return str(uid), nome, None
+        except ValueError:
+            pass
+    return None, None, '❌ Informe um @usuario ou ID válido.'
+
 @client.event
 async def on_ready():
     print(f'Logged in as {client.user}')
@@ -103,31 +127,32 @@ async def on_message(message):
     if cmd == '&ficha':
         ficha = get_ficha(data, message.author.id)
         save_data(data)
-        nome = message.author.display_name
-        avatar = message.author.display_avatar.url
+
+        nome = ficha.get('nome') or message.author.display_name
+        imagem = ficha.get('imagem') or message.author.display_avatar.url
 
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
         dor = status_dor(ficha['hp_atual'], ficha['hp_max'])
 
-        hp_pct_real = (ficha['hp_atual'] / ficha['hp_max'] * 100) if ficha['hp_max'] > 0 else 0
-        if ficha['hp_atual'] < 0:
-            cor = 0x1a1a2e
-        elif hp_pct_real < 30:
-            cor = 0xe74c3c
-        elif hp_pct_real < 50:
-            cor = 0xe67e22
-        elif hp_pct_real < 70:
-            cor = 0xf1c40f
+        if ficha.get('cor') is not None:
+            cor = ficha['cor']
         else:
-            cor = 0x2ecc71
+            hp_pct_real = (ficha['hp_atual'] / ficha['hp_max'] * 100) if ficha['hp_max'] > 0 else 0
+            if ficha['hp_atual'] < 0:
+                cor = 0x1a1a2e
+            elif hp_pct_real < 30:
+                cor = 0xe74c3c
+            elif hp_pct_real < 50:
+                cor = 0xe67e22
+            elif hp_pct_real < 70:
+                cor = 0xf1c40f
+            else:
+                cor = 0x2ecc71
 
-        embed = discord.Embed(
-            title=f"🧾 Ficha de Operador: {nome}",
-            color=cor
-        )
-        embed.set_thumbnail(url=avatar)
+        embed = discord.Embed(title=f"🧾 Ficha de Operador: {nome}", color=cor)
+        embed.set_thumbnail(url=imagem)
         embed.add_field(
             name="❤️ HP",
             value=f"`{ficha['hp_atual']}/{ficha['hp_max']}`\n⟦{hp_barra}⟧ • {hp_pct}%\n{dor}",
@@ -191,6 +216,27 @@ async def on_message(message):
             f"⟦{san_barra}⟧ • {san_pct}%"
         )
 
+    elif cmd == '&mudarcor':
+        if len(parts) < 3:
+            await message.channel.send('Uso: `&mudarcor @usuario/ID #RRGGBB`')
+            return
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
+        if erro:
+            await message.channel.send(erro)
+            return
+        cor, erro_cor = parse_cor(parts[-1])
+        if erro_cor:
+            await message.channel.send(f'❌ {erro_cor}')
+            return
+        ficha = get_ficha(data, uid)
+        ficha['cor'] = cor
+        save_data(data)
+        embed_preview = discord.Embed(
+            title=f"✅ Cor da ficha de **{nome_alvo}** atualizada!",
+            color=cor
+        )
+        await message.channel.send(embed=embed_preview)
+
     elif cmd == '&fichaajuda':
         ajuda = (
             "📖 **Comandos disponíveis para jogadores**\n"
@@ -207,6 +253,9 @@ async def on_message(message):
             "🧠 **`&sanidadeperder <valor>`**\n"
             "Reduz a sanidade do seu personagem.\n"
             "→ Exemplo: `&sanidadeperder 10`\n\n"
+            "🎨 **`&mudarcor @usuario/ID #RRGGBB`**\n"
+            "Muda a cor do embed da ficha de um jogador.\n"
+            "→ Exemplo: `&mudarcor @Jogador #FF0000`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "⚠️ Jogadores **não podem se curar sozinhos**. Apenas admins recuperam recursos."
         )
@@ -218,31 +267,38 @@ async def on_message(message):
             return
         ajuda_adm = (
             "🛡️ **Comandos de Administrador**\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "❤️ **`&sethpmax @usuario <valor>`**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Todos os comandos aceitam **@menção ou ID** do jogador.\n\n"
+            "❤️ **`&sethpmax @usuario/ID <valor>`**\n"
             "Define o HP máximo de um jogador.\n"
             "→ Exemplo: `&sethpmax @Jogador 150`\n\n"
-            "❤️ **`&hpadd @usuario <valor>`**\n"
+            "❤️ **`&hpadd @usuario/ID <valor>`**\n"
             "Cura HP de um jogador (não ultrapassa o máximo).\n"
             "→ Exemplo: `&hpadd @Jogador 30`\n\n"
-            "❤️ **`&removehpmax @usuario <valor>`**\n"
+            "❤️ **`&removehpmax @usuario/ID <valor>`**\n"
             "Reduz o HP máximo de um jogador permanentemente.\n"
             "→ Exemplo: `&removehpmax @Jogador 20`\n\n"
-            "❤️ **`&sethp @usuario <valor>`**\n"
-            "Define o HP atual de um jogador diretamente (debug).\n"
+            "❤️ **`&sethp @usuario/ID <valor>`**\n"
+            "Define o HP atual de um jogador diretamente.\n"
             "→ Exemplo: `&sethp @Jogador 50`\n\n"
-            "⚡ **`&setenergiamax @usuario <valor>`**\n"
+            "⚡ **`&setenergiamax @usuario/ID <valor>`**\n"
             "Define a energia máxima de um jogador.\n"
             "→ Exemplo: `&setenergiamax @Jogador 120`\n\n"
-            "⚡ **`&energiaadd @usuario <valor>`**\n"
-            "Recupera energia de um jogador (não ultrapassa o máximo).\n"
+            "⚡ **`&energiaadd @usuario/ID <valor>`**\n"
+            "Recupera energia de um jogador.\n"
             "→ Exemplo: `&energiaadd @Jogador 40`\n\n"
-            "🧠 **`&setsanidademax @usuario <valor>`**\n"
+            "🧠 **`&setsanidademax @usuario/ID <valor>`**\n"
             "Define a sanidade máxima de um jogador.\n"
             "→ Exemplo: `&setsanidademax @Jogador 100`\n\n"
-            "🧠 **`&sanidadeadd @usuario <valor>`**\n"
-            "Recupera sanidade de um jogador (não ultrapassa o máximo).\n"
+            "🧠 **`&sanidadeadd @usuario/ID <valor>`**\n"
+            "Recupera sanidade de um jogador.\n"
             "→ Exemplo: `&sanidadeadd @Jogador 25`\n\n"
+            "🖼️ **`&mudarimagem @usuario/ID`** *(anexe uma imagem)*\n"
+            "Muda a imagem da ficha de um jogador.\n"
+            "→ Exemplo: `&mudarimagem @Jogador` + anexar imagem\n\n"
+            "✏️ **`&mudarnome @usuario/ID novo nome`**\n"
+            "Muda o nome exibido na ficha de um jogador.\n"
+            "→ Exemplo: `&mudarnome @Jogador Kira Yamato\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
         await message.channel.send(ajuda_adm)
@@ -253,38 +309,38 @@ async def on_message(message):
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&sethpmax @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['hp_max'] = valor
         ficha['hp_atual'] = min(ficha['hp_atual'], valor)
         save_data(data)
-        await message.channel.send(f'✅ HP máximo de **{alvo.display_name}** definido para **{valor}**.')
+        await message.channel.send(f'✅ HP máximo de **{nome_alvo}** definido para **{valor}**.')
 
     elif cmd == '&hpadd':
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&hpadd @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['hp_atual'] = min(ficha['hp_max'], ficha['hp_atual'] + valor)
         save_data(data)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         await message.channel.send(
-            f"✅ **HP de {alvo.display_name}:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
+            f"✅ **HP de {nome_alvo}:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
             f"⟦{hp_barra}⟧ • {hp_pct}%"
         )
 
@@ -292,40 +348,40 @@ async def on_message(message):
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&removehpmax @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['hp_max'] = max(1, ficha['hp_max'] - valor)
         ficha['hp_atual'] = min(ficha['hp_atual'], ficha['hp_max'])
         save_data(data)
-        await message.channel.send(f'✅ HP máximo de **{alvo.display_name}** reduzido para **{ficha["hp_max"]}**.')
+        await message.channel.send(f'✅ HP máximo de **{nome_alvo}** reduzido para **{ficha["hp_max"]}**.')
 
     elif cmd == '&sethp':
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&sethp @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         hp_min = -(ficha['hp_max'] / 2)
         ficha['hp_atual'] = max(hp_min, min(ficha['hp_max'], valor))
         save_data(data)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         dor = status_dor(ficha['hp_atual'], ficha['hp_max'])
         await message.channel.send(
-            f"✅ **HP de {alvo.display_name}:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
+            f"✅ **HP de {nome_alvo}:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
             f"⟦{hp_barra}⟧ • {hp_pct}%\n"
             f"{dor}"
         )
@@ -334,38 +390,38 @@ async def on_message(message):
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&setenergiamax @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['energia_max'] = valor
         ficha['energia_atual'] = min(ficha['energia_atual'], valor)
         save_data(data)
-        await message.channel.send(f'✅ Energia máxima de **{alvo.display_name}** definida para **{valor}**.')
+        await message.channel.send(f'✅ Energia máxima de **{nome_alvo}** definida para **{valor}**.')
 
     elif cmd == '&energiaadd':
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&energiaadd @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['energia_atual'] = min(ficha['energia_max'], ficha['energia_atual'] + valor)
         save_data(data)
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         await message.channel.send(
-            f"✅ **Energia de {alvo.display_name}:** {ficha['energia_atual']}/{ficha['energia_max']}\n"
+            f"✅ **Energia de {nome_alvo}:** {ficha['energia_atual']}/{ficha['energia_max']}\n"
             f"⟦{en_barra}⟧ • {en_pct}%"
         )
 
@@ -373,40 +429,80 @@ async def on_message(message):
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&setsanidademax @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['sanidade_max'] = valor
         ficha['sanidade_atual'] = min(ficha['sanidade_atual'], valor)
         save_data(data)
-        await message.channel.send(f'✅ Sanidade máxima de **{alvo.display_name}** definida para **{valor}**.')
+        await message.channel.send(f'✅ Sanidade máxima de **{nome_alvo}** definida para **{valor}**.')
 
     elif cmd == '&sanidadeadd':
         if not is_admin(message.author):
             await message.channel.send('❌ Apenas administradores podem usar este comando.')
             return
-        if not message.mentions:
-            await message.channel.send('Uso: `&sanidadeadd @usuario <valor>`')
-            return
-        valor, erro = parse_valor(parts, -1)
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
         if erro:
-            await message.channel.send(f'❌ {erro}')
+            await message.channel.send(erro)
             return
-        alvo = message.mentions[0]
-        ficha = get_ficha(data, alvo.id)
+        valor, erro_v = parse_valor(parts, -1)
+        if erro_v:
+            await message.channel.send(f'❌ {erro_v}')
+            return
+        ficha = get_ficha(data, uid)
         ficha['sanidade_atual'] = min(ficha['sanidade_max'], ficha['sanidade_atual'] + valor)
         save_data(data)
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
         await message.channel.send(
-            f"✅ **Sanidade de {alvo.display_name}:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
+            f"✅ **Sanidade de {nome_alvo}:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
             f"⟦{san_barra}⟧ • {san_pct}%"
         )
+
+    elif cmd == '&mudarimagem':
+        if not is_admin(message.author):
+            await message.channel.send('❌ Apenas administradores podem usar este comando.')
+            return
+        if not message.attachments:
+            await message.channel.send('❌ Anexe uma imagem junto ao comando.\nUso: `&mudarimagem @usuario/ID` + imagem anexada')
+            return
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
+        if erro:
+            await message.channel.send(erro)
+            return
+        imagem_url = message.attachments[0].url
+        ficha = get_ficha(data, uid)
+        ficha['imagem'] = imagem_url
+        save_data(data)
+        await message.channel.send(f'✅ Imagem da ficha de **{nome_alvo}** atualizada!')
+
+    elif cmd == '&mudarnome':
+        if not is_admin(message.author):
+            await message.channel.send('❌ Apenas administradores podem usar este comando.')
+            return
+        if len(parts) < 3:
+            await message.channel.send('Uso: `&mudarnome @usuario/ID novo nome`')
+            return
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
+        if erro:
+            await message.channel.send(erro)
+            return
+        if message.mentions:
+            novo_nome = ' '.join(parts[2:])
+        else:
+            novo_nome = ' '.join(parts[2:])
+        if not novo_nome.strip():
+            await message.channel.send('❌ Informe um nome válido.')
+            return
+        ficha = get_ficha(data, uid)
+        ficha['nome'] = novo_nome.strip()
+        save_data(data)
+        await message.channel.send(f'✅ Nome de **{nome_alvo}** na ficha alterado para **{novo_nome.strip()}**.')
 
 async def health_check(request):
     return web.Response(text='OK')
