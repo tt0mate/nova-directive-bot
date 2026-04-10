@@ -3,9 +3,9 @@ import json
 import os
 import math
 import asyncio
+import asyncpg
 from aiohttp import web
 from dotenv import load_dotenv
-from replit import db
 
 load_dotenv()
 
@@ -13,6 +13,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+db_pool = None
 
 FICHA_PADRAO = {
     'hp_atual': 100,
@@ -26,18 +27,37 @@ FICHA_PADRAO = {
     'cor': None
 }
 
-def get_ficha(user_id):
+async def init_db():
+    global db_pool
+    db_pool = await asyncpg.create_pool(os.getenv('DATABASE_URL'))
+    await db_pool.execute('''
+        CREATE TABLE IF NOT EXISTS fichas (
+            user_id TEXT PRIMARY KEY,
+            data JSONB NOT NULL
+        )
+    ''')
+
+async def get_ficha(user_id):
     uid = str(user_id)
-    if uid not in db:
-        db[uid] = dict(FICHA_PADRAO)
-    ficha = dict(db[uid])
+    row = await db_pool.fetchrow('SELECT data FROM fichas WHERE user_id = $1', uid)
+    if row is None:
+        ficha = dict(FICHA_PADRAO)
+    else:
+        ficha = dict(row['data'])
     for campo, valor in FICHA_PADRAO.items():
         if campo not in ficha:
             ficha[campo] = valor
     return ficha
 
-def save_ficha(user_id, ficha):
-    db[str(user_id)] = ficha
+async def save_ficha(user_id, ficha):
+    uid = str(user_id)
+    await db_pool.execute(
+        '''
+        INSERT INTO fichas (user_id, data) VALUES ($1, $2::jsonb)
+        ON CONFLICT (user_id) DO UPDATE SET data = $2::jsonb
+        ''',
+        uid, json.dumps(ficha)
+    )
 
 def gerar_barra(atual, maximo):
     if maximo <= 0:
@@ -122,7 +142,7 @@ async def on_message(message):
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
     if cmd == '&ficha':
-        ficha = get_ficha(message.author.id)
+        ficha = await get_ficha(message.author.id)
 
         nome = ficha.get('nome') or message.author.display_name
         imagem = ficha.get('imagem') or message.author.display_avatar.url
@@ -175,10 +195,10 @@ async def on_message(message):
         if valor <= 0:
             await message.channel.send('❌ O valor precisa ser positivo.')
             return
-        ficha = get_ficha(message.author.id)
+        ficha = await get_ficha(message.author.id)
         hp_min = -(ficha['hp_max'] / 2)
         ficha['hp_atual'] = max(hp_min, ficha['hp_atual'] - valor)
-        save_ficha(message.author.id, ficha)
+        await save_ficha(message.author.id, ficha)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         dor = status_dor(ficha['hp_atual'], ficha['hp_max'])
         await message.channel.send(
@@ -194,9 +214,9 @@ async def on_message(message):
         if valor <= 0:
             await message.channel.send('❌ O valor precisa ser positivo.')
             return
-        ficha = get_ficha(message.author.id)
+        ficha = await get_ficha(message.author.id)
         ficha['energia_atual'] = max(0, ficha['energia_atual'] - valor)
-        save_ficha(message.author.id, ficha)
+        await save_ficha(message.author.id, ficha)
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         await message.channel.send(
             f"⚡ **Energia Espiritual:** {ficha['energia_atual']}/{ficha['energia_max']}\n"
@@ -211,9 +231,9 @@ async def on_message(message):
         if valor <= 0:
             await message.channel.send('❌ O valor precisa ser positivo.')
             return
-        ficha = get_ficha(message.author.id)
+        ficha = await get_ficha(message.author.id)
         ficha['sanidade_atual'] = max(0, ficha['sanidade_atual'] - valor)
-        save_ficha(message.author.id, ficha)
+        await save_ficha(message.author.id, ficha)
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
         await message.channel.send(
             f"🧠 **Sanidade:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
@@ -242,9 +262,9 @@ async def on_message(message):
         if erro_cor:
             await message.channel.send(f'❌ {erro_cor}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['cor'] = cor
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         embed_preview = discord.Embed(
             title=f"✅ Cor da ficha de **{nome_alvo}** atualizada!",
             color=cor
@@ -337,10 +357,10 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['hp_max'] = valor
         ficha['hp_atual'] = min(ficha['hp_atual'], valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ HP máximo de **{nome_alvo}** definido para **{valor}**.')
 
     elif cmd == '&hpadd':
@@ -355,9 +375,9 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['hp_atual'] = min(ficha['hp_max'], ficha['hp_atual'] + valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         await message.channel.send(
             f"✅ **HP de {nome_alvo}:** {ficha['hp_atual']}/{ficha['hp_max']}\n"
@@ -376,10 +396,10 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['hp_max'] = max(1, ficha['hp_max'] - valor)
         ficha['hp_atual'] = min(ficha['hp_atual'], ficha['hp_max'])
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ HP máximo de **{nome_alvo}** reduzido para **{ficha["hp_max"]}**.')
 
     elif cmd == '&sethp':
@@ -394,10 +414,10 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         hp_min = -(ficha['hp_max'] / 2)
         ficha['hp_atual'] = max(hp_min, min(ficha['hp_max'], valor))
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         dor = status_dor(ficha['hp_atual'], ficha['hp_max'])
         await message.channel.send(
@@ -417,10 +437,10 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['energia_max'] = valor
         ficha['energia_atual'] = min(ficha['energia_atual'], valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ Energia máxima de **{nome_alvo}** definida para **{valor}**.')
 
     elif cmd == '&energiaadd':
@@ -435,9 +455,9 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['energia_atual'] = min(ficha['energia_max'], ficha['energia_atual'] + valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         await message.channel.send(
             f"✅ **Energia de {nome_alvo}:** {ficha['energia_atual']}/{ficha['energia_max']}\n"
@@ -456,10 +476,10 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['sanidade_max'] = valor
         ficha['sanidade_atual'] = min(ficha['sanidade_atual'], valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ Sanidade máxima de **{nome_alvo}** definida para **{valor}**.')
 
     elif cmd == '&sanidadeadd':
@@ -474,9 +494,9 @@ async def on_message(message):
         if erro_v:
             await message.channel.send(f'❌ {erro_v}')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['sanidade_atual'] = min(ficha['sanidade_max'], ficha['sanidade_atual'] + valor)
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
         await message.channel.send(
             f"✅ **Sanidade de {nome_alvo}:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
@@ -491,11 +511,11 @@ async def on_message(message):
         if erro:
             await message.channel.send(erro)
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['hp_atual'] = ficha['hp_max']
         ficha['energia_atual'] = ficha['energia_max']
         ficha['sanidade_atual'] = ficha['sanidade_max']
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
         en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
         san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
@@ -532,9 +552,9 @@ async def on_message(message):
             await message.channel.send(erro)
             return
         imagem_url = message.attachments[0].url
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['imagem'] = imagem_url
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ Imagem da ficha de **{nome_alvo}** atualizada!')
 
     elif cmd == '&mudarnome':
@@ -552,9 +572,9 @@ async def on_message(message):
         if not novo_nome.strip():
             await message.channel.send('❌ Informe um nome válido.')
             return
-        ficha = get_ficha(uid)
+        ficha = await get_ficha(uid)
         ficha['nome'] = novo_nome.strip()
-        save_ficha(uid, ficha)
+        await save_ficha(uid, ficha)
         await message.channel.send(f'✅ Nome de **{nome_alvo}** na ficha alterado para **{novo_nome.strip()}**.')
 
 async def health_check(request):
@@ -565,16 +585,16 @@ async def start_web():
     app.router.add_get('/', health_check)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    port = int(os.getenv('PORT', 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
 async def main():
+    await init_db()
     async with client:
-        await start_web()
-        token = os.getenv('DISCORD_TOKEN')
-        if not token:
-            print('Error: DISCORD_TOKEN environment variable not set.')
-            return
-        await client.start(token)
+        await asyncio.gather(
+            start_web(),
+            client.start(os.getenv('DISCORD_TOKEN'))
+        )
 
 asyncio.run(main())
