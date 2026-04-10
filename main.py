@@ -139,7 +139,6 @@ async def on_message(message):
 
     parts = message.content.strip().split()
     cmd = parts[0].lower()
-
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
     if cmd == '&ficha':
