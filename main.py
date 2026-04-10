@@ -212,14 +212,24 @@ async def on_message(message):
         )
 
     elif cmd == '&mudarcor':
-        if len(parts) < 3:
-            await message.channel.send('Uso: `&mudarcor @usuario/ID #RRGGBB`')
+        if len(parts) < 2:
+            await message.channel.send('Uso: `&mudarcor #RRGGBB` (sua cor) ou `&mudarcor @usuario/ID #RRGGBB` (admin)')
             return
-        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
-        if erro:
-            await message.channel.send(erro)
-            return
-        cor, erro_cor = parse_cor(parts[-1])
+
+        if len(parts) == 2:
+            uid = str(message.author.id)
+            nome_alvo = message.author.display_name
+            cor, erro_cor = parse_cor(parts[1])
+        else:
+            uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
+            if erro:
+                await message.channel.send(erro)
+                return
+            if uid != str(message.author.id) and not is_admin(message.author):
+                await message.channel.send('❌ Você só pode mudar a cor da sua própria ficha.')
+                return
+            cor, erro_cor = parse_cor(parts[-1])
+
         if erro_cor:
             await message.channel.send(f'❌ {erro_cor}')
             return
@@ -248,9 +258,9 @@ async def on_message(message):
             "🧠 **`&sanidadeperder <valor>`**\n"
             "Reduz a sanidade do seu personagem.\n"
             "→ Exemplo: `&sanidadeperder 10`\n\n"
-            "🎨 **`&mudarcor @usuario/ID #RRGGBB`**\n"
-            "Muda a cor do embed da ficha de um jogador.\n"
-            "→ Exemplo: `&mudarcor @Jogador #FF0000`\n\n"
+            "🎨 **`&mudarcor #RRGGBB`**\n"
+            "Muda a cor do embed da sua própria ficha.\n"
+            "→ Exemplo: `&mudarcor #FF0000`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "⚠️ Jogadores **não podem se curar sozinhos**. Apenas admins recuperam recursos."
         )
@@ -294,6 +304,9 @@ async def on_message(message):
             "✏️ **`&mudarnome @usuario/ID novo nome`**\n"
             "Muda o nome exibido na ficha de um jogador.\n"
             "→ Exemplo: `&mudarnome @Jogador Kira Yamato`\n\n"
+            "🎨 **`&mudarcor @usuario/ID #RRGGBB`**\n"
+            "Muda a cor da ficha de qualquer jogador.\n"
+            "→ Exemplo: `&mudarcor @Jogador #00FF00`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
         await message.channel.send(ajuda_adm)
