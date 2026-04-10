@@ -133,13 +133,11 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-
     if not message.content.startswith('&'):
         return
 
     parts = message.content.strip().split()
     cmd = parts[0].lower()
-
 
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
