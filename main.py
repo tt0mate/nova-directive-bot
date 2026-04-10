@@ -172,6 +172,9 @@ async def on_message(message):
         if erro:
             await message.channel.send(f'❌ {erro}\nUso: `&hpdescontar <valor>`')
             return
+        if valor <= 0:
+            await message.channel.send('❌ O valor precisa ser positivo.')
+            return
         ficha = get_ficha(message.author.id)
         hp_min = -(ficha['hp_max'] / 2)
         ficha['hp_atual'] = max(hp_min, ficha['hp_atual'] - valor)
@@ -188,6 +191,9 @@ async def on_message(message):
         if erro:
             await message.channel.send(f'❌ {erro}\nUso: `&energiausar <valor>`')
             return
+        if valor <= 0:
+            await message.channel.send('❌ O valor precisa ser positivo.')
+            return
         ficha = get_ficha(message.author.id)
         ficha['energia_atual'] = max(0, ficha['energia_atual'] - valor)
         save_ficha(message.author.id, ficha)
@@ -201,6 +207,9 @@ async def on_message(message):
         valor, erro = parse_valor(parts, 1)
         if erro:
             await message.channel.send(f'❌ {erro}\nUso: `&sanidadeperder <valor>`')
+            return
+        if valor <= 0:
+            await message.channel.send('❌ O valor precisa ser positivo.')
             return
         ficha = get_ficha(message.author.id)
         ficha['sanidade_atual'] = max(0, ficha['sanidade_atual'] - valor)
@@ -307,6 +316,9 @@ async def on_message(message):
             "🎨 **`&mudarcor @usuario/ID #RRGGBB`**\n"
             "Muda a cor da ficha de qualquer jogador.\n"
             "→ Exemplo: `&mudarcor @Jogador #00FF00`\n\n"
+            "✨ **`&heall @usuario/ID`**\n"
+            "Cura HP, Energia e Sanidade de um jogador ao máximo.\n"
+            "→ Exemplo: `&heall @Jogador`\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
         await message.channel.send(ajuda_adm)
@@ -470,6 +482,43 @@ async def on_message(message):
             f"✅ **Sanidade de {nome_alvo}:** {ficha['sanidade_atual']}/{ficha['sanidade_max']}\n"
             f"⟦{san_barra}⟧ • {san_pct}%"
         )
+
+    elif cmd == '&heall':
+        if not is_admin(message.author):
+            await message.channel.send('❌ Apenas administradores podem usar este comando.')
+            return
+        uid, nome_alvo, erro = await resolver_alvo(message, parts, 1)
+        if erro:
+            await message.channel.send(erro)
+            return
+        ficha = get_ficha(uid)
+        ficha['hp_atual'] = ficha['hp_max']
+        ficha['energia_atual'] = ficha['energia_max']
+        ficha['sanidade_atual'] = ficha['sanidade_max']
+        save_ficha(uid, ficha)
+        hp_barra, hp_pct = gerar_barra(ficha['hp_atual'], ficha['hp_max'])
+        en_barra, en_pct = gerar_barra(ficha['energia_atual'], ficha['energia_max'])
+        san_barra, san_pct = gerar_barra(ficha['sanidade_atual'], ficha['sanidade_max'])
+        embed = discord.Embed(
+            title=f"✨ {nome_alvo} foi completamente curado!",
+            color=0x2ecc71
+        )
+        embed.add_field(
+            name="❤️ HP",
+            value=f"`{ficha['hp_atual']}/{ficha['hp_max']}`\n⟦{hp_barra}⟧ • {hp_pct}%",
+            inline=False
+        )
+        embed.add_field(
+            name="⚡ Energia",
+            value=f"`{ficha['energia_atual']}/{ficha['energia_max']}`\n⟦{en_barra}⟧ • {en_pct}%",
+            inline=True
+        )
+        embed.add_field(
+            name="🧠 Sanidade",
+            value=f"`{ficha['sanidade_atual']}/{ficha['sanidade_max']}`\n⟦{san_barra}⟧ • {san_pct}%",
+            inline=True
+        )
+        await message.channel.send(embed=embed)
 
     elif cmd == '&mudarimagem':
         if not is_admin(message.author):
