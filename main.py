@@ -131,21 +131,22 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    # ignora o próprio bot
     if message.author == client.user:
         return
-    
+
+    # só processa comandos que começam com &
     if not message.content.startswith('&'):
         return
 
-    parts = message.content.strip().split()
-    cmd = parts[0].lower()
-    
+    # bloqueia comandos vindos de bots/webhooks (tipo Tupper)
     if message.author.bot or message.webhook_id is not None:
         await message.channel.send("❌ Use os comandos sem Tupper.")
         return
-   
-    await client.process_commands(message)
 
+    # continua processando comandos normalmente
+    await client.process_commands(message)
+    
     parts = message.content.strip().split()
     cmd = parts[0].lower()
 
