@@ -133,15 +133,18 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-
-    if message.author.bot:
-        return
-
-    if message.webhook_id is not None:
-        return
-
+    
     if not message.content.startswith('&'):
         return
+
+    parts = message.content.strip().split()
+    cmd = parts[0].lower()
+    
+    if message.author.bot or message.webhook_id is not None:
+        await message.channel.send("❌ Use os comandos sem Tupper.")
+        return
+   
+    await client.process_commands(message)
 
     parts = message.content.strip().split()
     cmd = parts[0].lower()
