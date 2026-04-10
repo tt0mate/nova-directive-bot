@@ -133,6 +133,13 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
+
+    if message.author.bot:
+        return
+
+    if message.webhook_id is not None:
+        return
+
     if not message.content.startswith('&'):
         return
 
