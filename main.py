@@ -11,6 +11,10 @@ load_dotenv()
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
+intents.guilds = True
+
+print("[BOOT] Intents configuradas: message_content=True, members=True, guilds=True")
 
 client = discord.Client(intents=intents)
 db_pool = None
@@ -120,7 +124,8 @@ async def resolver_alvo(message, parts, index=1):
 
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user}')
+    print(f'[READY] Bot conectado como {client.user} (ID: {client.user.id})')
+    print(f'[READY] Servidores visíveis: {len(client.guilds)}')
     await client.change_presence(
         status=discord.Status.online,
         activity=discord.Activity(
@@ -131,13 +136,23 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    print(f'[MSG] author={message.author} bot={message.author.bot} content={repr(message.content[:80])}')
+
     if message.author == client.user:
+        print('[MSG] Ignorado: mensagem do próprio bot')
         return
+
+    if message.author.bot:
+        print(f'[MSG] Ignorado: autor é bot ({message.author})')
+        return
+
     if not message.content.startswith('&'):
+        print(f'[MSG] Ignorado: não começa com & (content={repr(message.content[:40])})')
         return
 
     parts = message.content.strip().split()
     cmd = parts[0].lower()
+    print(f'[CMD] Processando comando: {cmd} | autor: {message.author} | guild: {message.guild}')
 
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
