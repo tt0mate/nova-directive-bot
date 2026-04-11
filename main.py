@@ -4,13 +4,22 @@ import os
 import math
 import asyncio
 import asyncpg
+import logging
 from aiohttp import web
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True  # Necessário para resolver membros por ID no servidor
 
 client = discord.Client(intents=intents)
 db_pool = None
@@ -120,7 +129,25 @@ async def resolver_alvo(message, parts, index=1):
 
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user}')
+    logger.info(f'Bot conectado como {client.user} (ID: {client.user.id})')
+    logger.info(f'Intents ativas — message_content: {client.intents.message_content} | members: {client.intents.members}')
+
+    # Verificar permissões em cada servidor
+    for guild in client.guilds:
+        me = guild.me
+        perms = me.guild_permissions
+        logger.info(
+            f'Servidor: "{guild.name}" (ID: {guild.id}) | '
+            f'Permissões — read_messages: {perms.read_messages}, '
+            f'send_messages: {perms.send_messages}, '
+            f'read_message_history: {perms.read_message_history}'
+        )
+        if not perms.read_messages or not perms.send_messages:
+            logger.warning(
+                f'  ⚠ Permissões insuficientes em "{guild.name}"! '
+                f'O bot pode não conseguir ler ou enviar mensagens.'
+            )
+
     await client.change_presence(
         status=discord.Status.online,
         activity=discord.Activity(
@@ -131,13 +158,44 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    # ── Filtro 1: ignorar mensagens do próprio bot ────────────────────────────
     if message.author == client.user:
-        return
-    if not message.content.startswith('&'):
+        logger.debug(f'[IGNORADO] Mensagem do próprio bot ignorada.')
         return
 
+    # ── Filtro 2: ignorar outros bots e webhooks ──────────────────────────────
+    if message.author.bot:
+        logger.debug(
+            f'[IGNORADO] Mensagem de bot/webhook ignorada — '
+            f'autor: {message.author} (ID: {message.author.id}), '
+            f'webhook_id: {message.webhook_id}'
+        )
+        return
+
+    # ── Log de toda mensagem recebida de usuário real ─────────────────────────
+    guild_name = message.guild.name if message.guild else 'DM'
+    channel_name = getattr(message.channel, 'name', 'DM')
+    logger.debug(
+        f'[MENSAGEM] autor: {message.author} (ID: {message.author.id}, bot: {message.author.bot}) | '
+        f'servidor: "{guild_name}" | canal: "#{channel_name}" | '
+        f'conteúdo: {repr(message.content[:100])}'
+    )
+
+    # ── Filtro 3: ignorar mensagens sem o prefixo '&' ─────────────────────────
+    if not message.content.startswith('&'):
+        logger.debug(
+            f'[IGNORADO] Mensagem sem prefixo "&" de {message.author} — '
+            f'conteúdo: {repr(message.content[:60])}'
+        )
+        return
+
+    # ── Mensagem válida: processar comando ────────────────────────────────────
     parts = message.content.strip().split()
     cmd = parts[0].lower()
+    logger.info(
+        f'[COMANDO] "{cmd}" recebido de {message.author} (ID: {message.author.id}) '
+        f'em "{guild_name}/#{channel_name}"'
+    )
 
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
