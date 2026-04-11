@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True  # Necessário para resolver membros por ID no servidor
+intents.members = True
+intents.guilds = True
+
+print("[BOOT] Intents configuradas: message_content=True, members=True, guilds=True")
 
 client = discord.Client(intents=intents)
 db_pool = None
@@ -148,6 +152,8 @@ async def on_ready():
                 f'O bot pode não conseguir ler ou enviar mensagens.'
             )
 
+    print(f'[READY] Bot conectado como {client.user} (ID: {client.user.id})')
+    print(f'[READY] Servidores visíveis: {len(client.guilds)}')
     await client.change_presence(
         status=discord.Status.online,
         activity=discord.Activity(
@@ -187,6 +193,18 @@ async def on_message(message):
             f'[IGNORADO] Mensagem sem prefixo "&" de {message.author} — '
             f'conteúdo: {repr(message.content[:60])}'
         )
+    print(f'[MSG] author={message.author} bot={message.author.bot} content={repr(message.content[:80])}')
+
+    if message.author == client.user:
+        print('[MSG] Ignorado: mensagem do próprio bot')
+        return
+
+    if message.author.bot:
+        print(f'[MSG] Ignorado: autor é bot ({message.author})')
+        return
+
+    if not message.content.startswith('&'):
+        print(f'[MSG] Ignorado: não começa com & (content={repr(message.content[:40])})')
         return
 
     # ── Mensagem válida: processar comando ────────────────────────────────────
@@ -196,6 +214,7 @@ async def on_message(message):
         f'[COMANDO] "{cmd}" recebido de {message.author} (ID: {message.author.id}) '
         f'em "{guild_name}/#{channel_name}"'
     )
+    print(f'[CMD] Processando comando: {cmd} | autor: {message.author} | guild: {message.guild}')
 
     # ─── COMANDOS DE JOGADOR ───────────────────────────────────────────────────
 
